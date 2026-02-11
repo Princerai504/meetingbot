@@ -1,0 +1,175 @@
+.pageWrapper {
+    margin: var(--space-8) auto;
+    max-width: 900px;
+    width: 100%;
+}
+
+.header {
+    margin-bottom: var(--space-8);
+}
+
+.title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: hsl(var(--color-text-main));
+    margin-bottom: var(--space-2);
+}
+
+.subtitle {
+    color: hsl(var(--color-text-muted));
+    font-size: 1.125rem;
+}
+
+.controls {
+    display: flex;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+    flex-wrap: wrap;
+}
+
+.searchWrapper {
+    flex: 1;
+    position: relative;
+    min-width: 280px;
+}
+
+.searchIcon {
+    position: absolute;
+    left: var(--space-3);
+    top: 50%;
+    transform: translateY(-50%);
+    color: hsl(var(--color-text-muted));
+}
+
+.searchInput {
+    width: 100%;
+    padding: var(--space-2);
+    padding-left: var(--space-10);
+    /* Space for icon */
+    border-radius: var(--radius-md);
+    border: 1px solid hsl(var(--color-border));
+    background-color: hsl(var(--color-surface));
+    color: hsl(var(--color-text-main));
+    transition: all var(--transition-fast);
+}
+
+.searchInput:focus {
+    outline: none;
+    border-color: hsl(var(--color-primary));
+    box-shadow: 0 0 0 2px hsl(var(--color-primary) / 0.2);
+}
+
+.filterWrapper {
+    width: 200px;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.listItem {
+    background-color: hsl(var(--color-surface));
+    border: 1px solid hsl(var(--color-border));
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all var(--transition-fast);
+}
+
+.listItem:hover {
+    border-color: hsl(var(--color-primary) / 0.5);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+}
+
+.itemContent {
+    flex: 1;
+}
+
+.itemMain {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.itemTitle {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: hsl(var(--color-text-main));
+}
+
+.itemMeta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+}
+
+.metaItem {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: 0.875rem;
+    color: hsl(var(--color-text-muted));
+}
+
+.typeBadge {
+    font-size: 0.75rem;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+    background-color: hsl(var(--color-surface-hover));
+    color: hsl(var(--color-text-muted));
+    text-transform: capitalize;
+}
+
+/* Specific type colors if desired */
+.typeBadge.team_meeting {
+    color: hsl(var(--color-primary));
+    background-color: hsl(var(--color-primary) / 0.1);
+}
+
+.typeBadge.interview {
+    color: hsl(var(--color-success));
+    background-color: hsl(var(--color-success) / 0.1);
+}
+
+.typeBadge.client_call {
+    color: hsl(280 80% 60%);
+    background-color: hsl(280 80% 60% / 0.1);
+}
+
+.itemActions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: var(--space-4);
+}
+
+.deleteBtn {
+    padding: var(--space-2);
+    color: hsl(var(--color-text-muted));
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.deleteBtn:hover {
+    background-color: hsl(var(--color-danger) / 0.1);
+    color: hsl(var(--color-danger));
+}
+
+.emptyState {
+    text-align: center;
+    padding: var(--space-12);
+    color: hsl(var(--color-text-muted));
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    align-items: center;
+}

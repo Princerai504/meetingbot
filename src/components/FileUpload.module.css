@@ -1,0 +1,114 @@
+.wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    width: 100%;
+}
+
+.label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: hsl(var(--color-text-main));
+}
+
+.dropZone {
+    border: 2px dashed hsl(var(--color-border));
+    border-radius: var(--radius-lg);
+    padding: var(--space-8) var(--space-4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    background-color: hsl(var(--color-surface) / 0.5);
+}
+
+.dropZone:hover,
+.dropZone.active {
+    border-color: hsl(var(--color-primary));
+    background-color: hsl(var(--color-primary) / 0.05);
+}
+
+.input {
+    display: none;
+}
+
+.icon {
+    color: hsl(var(--color-text-muted));
+    margin-bottom: var(--space-3);
+    transition: color var(--transition-fast);
+}
+
+.dropZone:hover .icon,
+.dropZone.active .icon {
+    color: hsl(var(--color-primary));
+}
+
+.text {
+    font-size: 0.875rem;
+    color: hsl(var(--color-text-main));
+    font-weight: 500;
+}
+
+.highlight {
+    color: hsl(var(--color-primary));
+}
+
+.subtext {
+    font-size: 0.75rem;
+    color: hsl(var(--color-text-muted));
+    margin-top: var(--space-1);
+}
+
+.fileCard {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3);
+    border: 1px solid hsl(var(--color-border));
+    border-radius: var(--radius-md);
+    background-color: hsl(var(--color-surface));
+}
+
+.fileInfo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.fileIconWrapper {
+    padding: var(--space-2);
+    background-color: hsl(var(--color-primary) / 0.1);
+    color: hsl(var(--color-primary));
+    border-radius: var(--radius-sm);
+}
+
+.fileDetails {
+    display: flex;
+    flex-direction: column;
+}
+
+.fileName {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: hsl(var(--color-text-main));
+}
+
+.fileSize {
+    font-size: 0.75rem;
+    color: hsl(var(--color-text-muted));
+}
+
+.removeBtn {
+    padding: var(--space-1);
+    color: hsl(var(--color-text-muted));
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.removeBtn:hover {
+    background-color: hsl(var(--color-danger) / 0.1);
+    color: hsl(var(--color-danger));
+}

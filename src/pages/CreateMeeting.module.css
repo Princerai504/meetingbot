@@ -1,0 +1,129 @@
+.pageWrapper {
+    max-width: 800px;
+    margin: var(--space-8) auto;
+    width: 100%;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: var(--space-8);
+}
+
+.title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: hsl(var(--color-text-main));
+    margin-bottom: var(--space-2);
+}
+
+.subtitle {
+    color: hsl(var(--color-text-muted));
+    font-size: 1.125rem;
+}
+
+.formCard {
+    background-color: hsl(var(--color-surface));
+    border-radius: var(--radius-xl);
+    border: 1px solid hsl(var(--color-border));
+    padding: var(--space-8);
+    box-shadow: var(--shadow-lg);
+}
+
+.formSection {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+@media (min-width: 640px) {
+    .formSection {
+        grid-template-columns: 2fr 1fr;
+        /* Title wider than Type */
+    }
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: var(--space-6) 0;
+    color: hsl(var(--color-text-muted));
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid hsl(var(--color-border));
+}
+
+.divider::before {
+    margin-right: var(--space-4);
+}
+
+.divider::after {
+    margin-left: var(--space-4);
+}
+
+.uploadSection {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+}
+
+.orText {
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: hsl(var(--color-text-muted));
+    letter-spacing: 0.05em;
+}
+
+.textAreaWrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: hsl(var(--color-text-main));
+}
+
+.textarea {
+    width: 100%;
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    border: 1px solid hsl(var(--color-border));
+    background-color: hsl(var(--color-surface));
+    color: hsl(var(--color-text-main));
+    font-family: var(--font-sans);
+    resize: vertical;
+    transition: all var(--transition-fast);
+}
+
+.textarea:focus {
+    outline: none;
+    border-color: hsl(var(--color-primary));
+    box-shadow: 0 0 0 2px hsl(var(--color-primary) / 0.2);
+}
+
+.textarea:disabled {
+    background-color: hsl(var(--color-background));
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.actions {
+    margin-top: var(--space-8);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.submitBtn {
+    width: 100%;
+}

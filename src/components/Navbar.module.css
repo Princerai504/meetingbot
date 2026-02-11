@@ -1,0 +1,60 @@
+.navbar {
+    background-color: hsl(var(--color-surface));
+    border-bottom: 1px solid hsl(var(--color-border));
+    padding: var(--space-4) 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+    background-color: hsl(var(--color-surface) / 0.8);
+}
+
+.container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: hsl(var(--color-text-main));
+}
+
+.iconWrapper {
+    background-color: hsl(var(--color-primary));
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.links {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    color: hsl(var(--color-text-muted));
+    font-weight: 500;
+    transition: all var(--transition-fast);
+}
+
+.link:hover {
+    background-color: hsl(var(--color-surface-hover));
+    color: hsl(var(--color-text-main));
+}
+
+.link.active {
+    background-color: hsl(var(--color-primary) / 0.1);
+    color: hsl(var(--color-primary));
+}
