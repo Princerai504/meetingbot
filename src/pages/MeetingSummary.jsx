@@ -14,9 +14,14 @@ const MeetingSummary = () => {
     const [error, setError] = useState(null);
 
     useEffect(() => {
+        console.log("[FRONTEND] MeetingSummary mounted, ID:", id);
+        
         const fetchMeeting = async () => {
+            console.log("[FRONTEND] Fetching meeting data...");
             try {
                 const meeting = await api.getMeeting(id);
+                console.log("[FRONTEND] Meeting data received:", meeting);
+                console.log("[FRONTEND] AI output:", meeting.ai_output);
 
                 // Transform backend data to frontend format if needed
                 // Assuming backend returns { title, timestamp, ai_output: { summary, key_points... } }
@@ -28,10 +33,11 @@ const MeetingSummary = () => {
                     decisions: meeting.ai_output?.decisions || [],
                     actionItems: meeting.ai_output?.action_items || []
                 };
-
+                
+                console.log("[FRONTEND] Formatted data:", formattedData);
                 setData(formattedData);
             } catch (err) {
-                console.error("Failed to load meeting:", err);
+                console.error("[FRONTEND] Failed to load meeting:", err);
                 setError("Failed to load meeting details.");
             } finally {
                 setLoading(false);
@@ -46,6 +52,12 @@ const MeetingSummary = () => {
     if (loading) return <div className="container">Loading...</div>;
     if (error) return <div className="container">{error}</div>;
     if (!data) return null;
+    
+    console.log("[FRONTEND] Rendering with data:", data);
+    console.log("[FRONTEND] Summary:", data.summary);
+    console.log("[FRONTEND] KeyPoints:", data.keyPoints);
+    console.log("[FRONTEND] ActionItems:", data.actionItems);
+    console.log("[FRONTEND] Decisions:", data.decisions);
 
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -143,16 +155,16 @@ ${data.actionItems.map(i => `[${i.status}] ${i.task} (${i.owner})`).join('\n')}
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {data.actionItems.map(item => (
-                                            <tr key={item.id}>
-                                                <td>{item.task}</td>
+                                        {data.actionItems.map((item, index) => (
+                                            <tr key={index}>
+                                                <td>{item.task || 'No task'}</td>
                                                 <td>
-                                                    <span className={styles.avatar}>{item.owner[0]}</span>
-                                                    {item.owner}
+                                                    <span className={styles.avatar}>{(item.owner || '?')[0]}</span>
+                                                    {item.owner || 'Unassigned'}
                                                 </td>
                                                 <td>
-                                                    <span className={`${styles.statusBadge} ${styles[item.status.toLowerCase().replace(' ', '')]} `}>
-                                                        {item.status}
+                                                    <span className={`${styles.statusBadge} ${styles[(item.status || 'pending').toLowerCase().replace(' ', '')]} `}>
+                                                        {item.status || 'Pending'}
                                                     </span>
                                                 </td>
                                             </tr>

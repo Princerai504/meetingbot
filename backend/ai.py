@@ -1,93 +1,155 @@
-from openai import OpenAI
+"""
+AI Module - Using Google Gemini for meeting summarization
+"""
+
 import os
-from dotenv import load_dotenv
 import json
-import typing_extensions as typing
+from google import genai
+from google.genai import types
+from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
-
-API_KEY = os.getenv("OPENAI_API_KEY")
-CLIENT = None
+# Load API key from environment
+API_KEY = os.getenv("GEMINI_API_KEY")
+client = None
 
 if API_KEY:
-    CLIENT = OpenAI(api_key=API_KEY)
+    client = genai.Client(api_key=API_KEY)
+    print(f"[AI] Gemini client initialized successfully")
+else:
+    print("[AI] WARNING: GEMINI_API_KEY not found in environment")
+
 
 def generate_meeting_summary(transcript: str = None, file_path: str = None) -> dict:
     """
-    Generates a structured meeting summary using OpenAI (GPT-4o).
-    If a file path is provided, it first transcribes the audio using Whisper-1.
+    Generates a structured meeting summary using Google Gemini.
+    Can process both audio files and text transcripts.
+    
+    Args:
+        transcript: Meeting transcript text (optional)
+        file_path: Path to audio file (optional)
+    
+    Returns:
+        dict: Structured meeting summary with summary, key_points, decisions, action_items, agenda
     """
-    if not CLIENT:
-        print("Warning: OPENAI_API_KEY not found. Returning mock data.")
-        return _get_mock_data()
-
+    print(f"[AI] generate_meeting_summary called")
+    print(f"[AI] transcript provided: {transcript is not None}")
+    print(f"[AI] file_path provided: {file_path is not None}")
+    print(f"[AI] Client status: {'Initialized' if client else 'Not initialized'}")
+    
     try:
-        # Step 1: Transcribe if file is provided and no transcript
-        current_transcript = transcript
-        if not current_transcript and file_path and os.path.exists(file_path):
-            try:
-                with open(file_path, "rb") as audio_file:
-                    transcription = CLIENT.audio.transcriptions.create(
-                        model="whisper-1",
-                        file=audio_file
-                    )
-                    current_transcript = transcription.text
-            except Exception as e:
-                print(f"Transcription failed: {e}")
-                # Fallback or return partial error
-                return _get_mock_data(error=f"Transcription failed: {str(e)}")
-
-        if not current_transcript:
-             return _get_mock_data(error="No content to analyze.")
-
-        # Step 2: Generate Summary
-        system_prompt = """
-        You are an expert meeting assistant. Analyze the provided meeting content and extract the following structured information:
-        1. A concise summary of the meeting.
-        2. Key points discussed.
-        3. Decisions made.
-        4. Action items with owners, status (default to Pending), and due dates if mentioned.
-        5. The agenda or topic breakdown.
+        # Define the prompt for structured output
+        prompt = """
+        Analyze this meeting and provide a comprehensive structured summary.
         
-        Output must be strictly valid JSON matching this schema:
+        Please extract and return the following information in valid JSON format:
+        
+        1. summary: A concise 2-3 sentence overview of the entire meeting
+        2. key_points: List of 3-5 main discussion points or important information shared
+        3. decisions: List of decisions made during the meeting
+        4. action_items: List of tasks with owners and status (always set status to "Pending")
+        5. agenda: List of topics or agenda items discussed
+        
+        Return ONLY valid JSON in this exact structure:
         {
-            "summary": "string",
-            "key_points": ["string"],
-            "decisions": ["string"],
-            "action_items": [{"task": "string", "owner": "string", "status": "string", "due_date": "string"}],
-            "agenda": ["string"]
+            "summary": "Brief overview of what was discussed",
+            "key_points": ["Point 1", "Point 2", "Point 3"],
+            "decisions": ["Decision 1", "Decision 2"],
+            "action_items": [
+                {"task": "Task description", "owner": "Person Name", "status": "Pending"}
+            ],
+            "agenda": ["Topic 1", "Topic 2", "Topic 3"]
         }
         """
-
-        response = CLIENT.chat.completions.create(
-            model="gpt-4o",  # Using GPT-4o for best structured output
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Here is the meeting transcript:\n\n{current_transcript}"}
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.2
-        )
         
-        content = response.choices[0].message.content
-        return json.loads(content)
-
+        if file_path and os.path.exists(file_path):
+            # Process audio file
+            print(f"[Gemini] Uploading audio file: {file_path}")
+            
+            # Upload file to Gemini
+            myfile = client.files.upload(file=file_path)
+            print(f"[Gemini] File uploaded successfully")
+            
+            # Generate content with audio
+            response = client.models.generate_content(
+                model="gemini-3-flash-preview",
+                contents=[prompt, myfile],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
+            )
+            
+        elif transcript:
+            # Process text transcript
+            print("[Gemini] Processing transcript...")
+            
+            full_prompt = f"{prompt}\n\nMeeting Transcript:\n{transcript}"
+            
+            response = client.models.generate_content(
+                model="gemini-3-flash-preview",
+                contents=[full_prompt],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
+            )
+        else:
+            # No content provided
+            return _get_mock_data(error="No content provided for analysis.")
+        
+        # Parse JSON response
+        try:
+            result = json.loads(response.text)
+            print(f"[Gemini] Raw result type: {type(result)}")
+            print(f"[Gemini] Raw result: {result}")
+            
+            # Check if result is a list and extract the first element
+            if isinstance(result, list) and len(result) > 0:
+                result = result[0]
+                print("[Gemini] Extracted first element from list")
+            
+            print("[Gemini] Successfully generated summary")
+            return result
+        except json.JSONDecodeError as e:
+            print(f"[Gemini] JSON parse error: {e}")
+            print(f"[Gemini] Raw response: {response.text}")
+            return _get_mock_data(error=f"Failed to parse response: {str(e)}")
+            
     except Exception as e:
-        print(f"Error generating summary: {e}")
+        print(f"[Gemini] Error generating summary: {e}")
         return _get_mock_data(error=str(e))
 
+
 def _get_mock_data(error=None):
+    """
+    Returns mock data when API is unavailable or errors occur.
+    """
     summary_text = "AI generation failed. This is a mock summary."
     if error:
         summary_text += f" (Error: {error})"
-        
+    
     return {
         "summary": summary_text,
-        "key_points": ["Mock Point 1", "Mock Point 2"],
-        "decisions": ["Mock Decision 1"],
-        "action_items": [
-            {"task": "Check API Key", "owner": "Developer", "status": "Pending", "due_date": "ASAP"}
+        "key_points": [
+            "Mock Point 1: Unable to process meeting content",
+            "Mock Point 2: Please check API configuration",
+            "Mock Point 3: Ensure audio file or transcript is valid"
         ],
-        "agenda": ["Topic A", "Topic B"]
+        "decisions": [
+            "Mock Decision: Review API key and try again"
+        ],
+        "action_items": [
+            {
+                "task": "Check Gemini API Key configuration",
+                "owner": "Developer",
+                "status": "Pending"
+            },
+            {
+                "task": "Verify audio file format (MP3, WAV, MP4 supported)",
+                "owner": "Developer",
+                "status": "Pending"
+            }
+        ],
+        "agenda": [
+            "Topic A: API Configuration",
+            "Topic B: File Format Verification"
+        ]
     }

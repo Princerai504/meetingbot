@@ -6,6 +6,7 @@ import os
 import json
 from datetime import datetime
 from . import models, schemas, database
+from .bot.routes import router as bot_router
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -20,6 +21,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include bot routes
+app.include_router(bot_router)
 
 # Dependency
 def get_db():
@@ -41,18 +45,26 @@ async def create_meeting(
     file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
+    print(f"\n[BACKEND] Received create_meeting request")
+    print(f"[BACKEND] Title: {title}")
+    print(f"[BACKEND] Type: {type}")
+    print(f"[BACKEND] Has transcript: {transcript is not None}")
+    print(f"[BACKEND] Has file: {file is not None}")
+    
     file_path = None
     if file:
         file_path = os.path.join(UPLOAD_DIR, file.filename)
+        print(f"[BACKEND] Saving file to: {file_path}")
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        print(f"[BACKEND] File saved successfully")
 
     # Generate AI Output
     from .ai import generate_meeting_summary
     
     # Check if we have content to process
     if not transcript and not file_path:
-        # Fallback if nothing provided
+        print("[BACKEND] No content provided, using fallback")
         ai_output = {
             "summary": "No content provided for analysis.",
             "key_points": [],
@@ -61,9 +73,23 @@ async def create_meeting(
             "agenda": []
         }
     else:
-        # call Gemini
-        ai_output = generate_meeting_summary(transcript=transcript, file_path=file_path)
+        print(f"[BACKEND] Calling Gemini AI...")
+        try:
+            ai_output = generate_meeting_summary(transcript=transcript, file_path=file_path)
+            print(f"[BACKEND] AI output received: {ai_output}")
+        except Exception as e:
+            print(f"[BACKEND] ERROR in AI generation: {e}")
+            import traceback
+            traceback.print_exc()
+            ai_output = {
+                "summary": f"Error generating summary: {str(e)}",
+                "key_points": [],
+                "decisions": [],
+                "action_items": [],
+                "agenda": []
+            }
 
+    print(f"[BACKEND] Creating meeting record...")
     db_meeting = models.Meeting(
         title=title,
         type=type,
@@ -75,6 +101,8 @@ async def create_meeting(
     db.add(db_meeting)
     db.commit()
     db.refresh(db_meeting)
+    print(f"[BACKEND] Meeting created with ID: {db_meeting.id}")
+    print(f"[BACKEND] Meeting AI output: {db_meeting.ai_output}\n")
     return db_meeting
 
 @app.get("/meetings", response_model=List[schemas.Meeting])
