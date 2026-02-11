@@ -2,6 +2,8 @@
 
 An AI-powered meeting summarization application that automatically generates structured summaries from meeting recordings. Features both file upload and Google Meet bot integration using Google's Gemini AI.
 
+**Last Updated**: 2026-02-11 by Princerai504
+
 ## ✨ Features
 
 - **🎙️ Audio Upload**: Upload MP3, WAV, MP4 files for instant transcription and summary
