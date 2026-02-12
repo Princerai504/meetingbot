@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="logo">
+        <span class="logo-icon">🎙️</span>
+        <h1>Meeting AI</h1>
+      </div>
+      <div id="status-indicator" class="status-badge offline">
+        <span class="status-dot"></span>
+        <span id="status-text">Not on Meet</span>
+      </div>
+    </header>
+
+    <main>
+      <!-- Recording Controls -->
+      <section id="recording-section" class="card hidden">
+        <div class="recording-controls">
+          <button id="start-btn" class="btn btn-primary btn-large">
+            <span class="btn-icon">●</span>
+            Start Recording
+          </button>
+          
+          <button id="stop-btn" class="btn btn-danger btn-large hidden">
+            <span class="btn-icon">■</span>
+            Stop Recording
+          </button>
+        </div>
+
+        <div id="recording-info" class="recording-info hidden">
+          <div class="timer-display" id="recording-timer">00:00</div>
+          <div class="recording-indicator">
+            <span class="pulse-dot"></span>
+            <span class="recording-text">Recording</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Upload Section -->
+      <section id="upload-section" class="card">
+        <div class="divider">
+          <span class="divider-text">OR</span>
+        </div>
+        
+        <div class="upload-area" id="upload-area">
+          <input type="file" id="file-input" accept="audio/*,video/*" hidden>
+          <div class="upload-content">
+            <div class="upload-icon-wrapper">
+              <span class="upload-icon">📁</span>
+            </div>
+            <p class="upload-title">Upload audio file</p>
+            <p class="upload-hint">MP3, WAV, MP4, WEBM</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Processing Section -->
+      <section id="processing-section" class="card hidden">
+        <div class="processing-content">
+          <div class="spinner-large"></div>
+          <p class="processing-title">Processing with AI...</p>
+          <p class="processing-hint">This may take a minute</p>
+        </div>
+      </section>
+
+      <!-- Results Section -->
+      <section id="results-section" class="card hidden">
+        <div class="results-header">
+          <h2>📋 Meeting Summary</h2>
+          <button id="new-recording-btn" class="btn btn-secondary btn-small">
+            New
+          </button>
+        </div>
+        
+        <div id="summary-content" class="summary-container">
+          <!-- Dynamic content will be inserted here -->
+        </div>
+
+        <div class="results-actions">
+          <button id="download-btn" class="btn btn-outline btn-small">
+            💾 Download
+          </button>
+          <button id="view-history-btn" class="btn btn-outline btn-small">
+            📋 History
+          </button>
+        </div>
+      </section>
+
+      <!-- Error Section -->
+      <section id="error-section" class="card hidden">
+        <div class="error-content">
+          <span class="error-icon">⚠️</span>
+          <p class="error-text" id="error-text">An error occurred</p>
+          <button id="retry-btn" class="btn btn-primary btn-small">Try Again</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+      <div class="backend-status">
+        <span id="backend-status-dot" class="status-dot offline"></span>
+        <span id="backend-status-text" class="backend-text">Backend offline</span>
+      </div>
+      <span class="version">v1.0.0</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

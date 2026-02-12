@@ -1,5 +1,11 @@
+import sys
+import os
+
+# Add backend directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Enum
-from .database import Base
+from database import Base
 from datetime import datetime
 import enum
 

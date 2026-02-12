@@ -1,12 +1,16 @@
+import sys
+import os
+
+# Add backend directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import shutil
-import os
 import json
 from datetime import datetime
-from . import models, schemas, database
-from .bot.routes import router as bot_router
+import models, schemas, database
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,14 +20,11 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174"],
+    allow_origins=["*"],  # Allow all origins for extension
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Include bot routes
-app.include_router(bot_router)
 
 # Dependency
 def get_db():
