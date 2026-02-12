@@ -1,19 +1,10 @@
-// Popup Script - Controls the extension UI and handles recording
-// Handles recording, upload, and display of results
+// Popup Script - Controls the extension UI
+// Recording is delegated to the offscreen document via background script
 
-// Enhanced recording state management
-let recordingState = {
-  isRecording: false,
-  startTime: null,
-  duration: 0,
-  stream: null,
-  mediaRecorder: null,
-  audioChunks: [],
-  currentAudioBlob: null,
-  timer: null,
-  errorCount: 0,
-  maxErrorCount: 3
-};
+// UI state (not recording state — that lives in offscreen/background)
+let timerInterval = null;
+let recordingStartTime = null;
+let currentAudioBase64 = null;
 
 // DOM Elements
 const elements = {
@@ -40,55 +31,25 @@ const elements = {
   backendStatusText: document.getElementById('backend-status-text')
 };
 
-// Initialize popup
+// ─── Initialize ─────────────────────────────────────────────────────────────
+
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('[Popup] Extension popup opened');
-  
-  // Check backend status
+
   await checkBackendStatus();
-  
-  // Check if user is on Google Meet
   await checkMeetStatus();
-  
-  // Setup event listeners
   setupEventListeners();
-  
-  // Listen for background messages
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'restartRecording') {
-      console.log('[Popup] Received restart recording command');
-      restartRecording();
-      return true;
-    }
-  });
-  
-  // Initialize recording state
-  initializeRecordingState();
+
+  // Check if recording is already in progress (popup was reopened)
+  await syncRecordingState();
 });
 
-// Initialize recording state
-function initializeRecordingState() {
-  recordingState = {
-    isRecording: false,
-    startTime: null,
-    duration: 0,
-    stream: null,
-    mediaRecorder: null,
-    audioChunks: [],
-    currentAudioBlob: null,
-    timer: null,
-    errorCount: 0,
-    maxErrorCount: 3
-  };
-}
+// ─── Backend Status ─────────────────────────────────────────────────────────
 
-// Check if backend is running
 async function checkBackendStatus() {
   try {
-    const response = await fetch('http://localhost:8000/meetings', {
-      method: 'GET'
-    });
-    
+    const response = await fetch('http://localhost:8000/meetings', { method: 'GET' });
+
     if (response.ok) {
       elements.backendStatusDot.className = 'status-dot online';
       elements.backendStatusText.textContent = 'Backend online';
@@ -102,18 +63,17 @@ async function checkBackendStatus() {
   }
 }
 
-// Check if current tab is Google Meet
+// ─── Meet Detection ─────────────────────────────────────────────────────────
+
 async function checkMeetStatus() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
+
     if (tab && tab.url && tab.url.includes('meet.google.com')) {
-      // On Google Meet page
       elements.statusIndicator.className = 'status-badge online';
       elements.statusText.textContent = 'On Google Meet';
       elements.recordingSection.classList.remove('hidden');
     } else {
-      // Not on Meet
       elements.statusIndicator.className = 'status-badge offline';
       elements.statusText.textContent = 'Not on Meet';
       elements.recordingSection.classList.add('hidden');
@@ -123,26 +83,40 @@ async function checkMeetStatus() {
   }
 }
 
-// Setup all event listeners
+// ─── Sync Recording State ───────────────────────────────────────────────────
+
+async function syncRecordingState() {
+  try {
+    const status = await chrome.runtime.sendMessage({ action: 'getStatus' });
+
+    if (status && status.isRecording) {
+      // Recording is already in progress — update UI to reflect it
+      recordingStartTime = status.recordingStartTime || Date.now();
+      showRecordingUI();
+    }
+  } catch (error) {
+    console.log('[Popup] Could not sync recording state:', error.message);
+  }
+}
+
+// ─── Event Listeners ────────────────────────────────────────────────────────
+
 function setupEventListeners() {
-  // Recording buttons
   elements.startBtn.addEventListener('click', startRecording);
   elements.stopBtn.addEventListener('click', stopRecording);
-  
+
   // File upload
   elements.uploadArea.addEventListener('click', () => elements.fileInput.click());
   elements.fileInput.addEventListener('change', handleFileUpload);
-  
+
   // Drag and drop
   elements.uploadArea.addEventListener('dragover', (e) => {
     e.preventDefault();
     elements.uploadArea.classList.add('dragover');
   });
-  
   elements.uploadArea.addEventListener('dragleave', () => {
     elements.uploadArea.classList.remove('dragover');
   });
-  
   elements.uploadArea.addEventListener('drop', (e) => {
     e.preventDefault();
     elements.uploadArea.classList.remove('dragover');
@@ -150,7 +124,7 @@ function setupEventListeners() {
       handleFile(e.dataTransfer.files[0]);
     }
   });
-  
+
   // Results actions
   elements.newRecordingBtn.addEventListener('click', resetUI);
   elements.downloadBtn.addEventListener('click', downloadAudio);
@@ -158,547 +132,144 @@ function setupEventListeners() {
   elements.retryBtn.addEventListener('click', resetUI);
 }
 
-// Start recording with enhanced state management
+// ─── Recording (via offscreen document) ─────────────────────────────────────
+
 async function startRecording() {
   console.log('[Popup] Starting recording...');
-  
+
   try {
-    // Get active tab
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
-    if (!tab || !tab.url.includes('meet.google.com')) {
+
+    if (!tab || !tab.url || !tab.url.includes('meet.google.com')) {
       showError('Please navigate to a Google Meet meeting first');
       return;
     }
-    
-    // Check if already recording
-    if (recordingState.isRecording) {
-      showError('Already recording');
-      return;
-    }
-    
-    // Request recording permission from background script
-    const recordingPermission = await requestRecordingPermission();
-    if (!recordingPermission.granted) {
-      showError('Recording permission denied: ' + recordingPermission.reason);
-      return;
-    }
-    
-    // Capture tab audio with proper error handling
-    chrome.tabCapture.capture({
-      audio: true,
-      video: false
-    }, (stream) => {
-      if (chrome.runtime.lastError) {
-        console.error('[Popup] tabCapture error:', chrome.runtime.lastError);
-        showError('Failed to capture audio: ' + chrome.runtime.lastError.message);
-        return;
-      }
-      
-      if (!stream) {
-        showError('Could not capture audio stream. Please make sure you are in an active Google Meet meeting.');
-        return;
-      }
-      
-      try {
-        // Store stream for later cleanup
-        recordingState.stream = stream;
-        
-        // Create MediaRecorder with proper error handling
-        recordingState.mediaRecorder = new MediaRecorder(stream, {
-          mimeType: 'audio/webm;codecs=opus'
-        });
-        
-        recordingState.audioChunks = [];
-        recordingState.errorCount = 0;
-        
-        // Enhanced data available handler with error recovery
-        recordingState.mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            recordingState.audioChunks.push(event.data);
-            console.log('[Popup] Audio chunk received:', event.data.size, 'bytes');
-          }
-        };
-        
-        // Enhanced stop handler with proper cleanup
-        recordingState.mediaRecorder.onstop = () => {
-          console.log('[Popup] Recording stopped');
-          // Stop all tracks to release the stream
-          stream.getTracks().forEach(track => track.stop());
-          recordingState.stream = null;
-          
-          // Notify background script
-          chrome.runtime.sendMessage({
-            action: 'recordingStopped',
-            duration: recordingState.duration
-          });
-        };
-        
-        // Enhanced error handler with recovery
-        recordingState.mediaRecorder.onerror = (event) => {
-          console.error('[Popup] MediaRecorder error:', event);
-          recordingState.isRecording = false;
-          
-          // Handle error with recovery
-          handleRecordingError(event);
-        };
-        
-        // Start recording with 1-second chunks
-        recordingState.mediaRecorder.start(1000);
-        recordingState.isRecording = true;
-        recordingState.startTime = Date.now();
-        recordingState.duration = 0;
-        
-        // Update recording state in background
-        updateRecordingState(true);
-        
-        // Update UI
-        elements.startBtn.classList.add('hidden');
-        elements.stopBtn.classList.remove('hidden');
-        elements.recordingInfo.classList.remove('hidden');
-        elements.uploadSection.classList.add('hidden');
-        
-        // Start timer
-        startTimer();
-        
-        console.log('[Popup] Recording started successfully');
-      } catch (recorderError) {
-        console.error('[Popup] MediaRecorder setup error:', recorderError);
-        showError('Failed to initialize recorder: ' + recorderError.message);
-        // Clean up stream
-        stream.getTracks().forEach(track => track.stop());
-        recordingState.stream = null;
-        
-        // Notify background script
-        chrome.runtime.sendMessage({
-          action: 'recordingError',
-          error: recorderError.message
-        });
-      }
+
+    // Get a media stream ID for the current tab
+    // In MV3, this must be called from the popup (user gesture context)
+    const streamId = await chrome.tabCapture.getMediaStreamId({
+      targetTabId: tab.id
     });
+
+    if (!streamId) {
+      showError('Could not get audio stream. Make sure you are in a Google Meet meeting.');
+      return;
+    }
+
+    console.log('[Popup] Got stream ID, sending to background...');
+
+    // Send stream ID to background → offscreen for recording
+    const result = await chrome.runtime.sendMessage({
+      action: 'startRecording',
+      streamId: streamId
+    });
+
+    if (result && result.success) {
+      recordingStartTime = Date.now();
+      showRecordingUI();
+      console.log('[Popup] Recording started successfully');
+    } else {
+      showError('Failed to start recording: ' + (result?.error || 'Unknown error'));
+    }
   } catch (error) {
     console.error('[Popup] Error starting recording:', error);
     showError('Error: ' + error.message);
-    
-    // Notify background script
-    chrome.runtime.sendMessage({
-      action: 'recordingError',
-      error: error.message
-    });
   }
 }
 
-// Request recording permission from background script
-async function requestRecordingPermission() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({
-      action: 'requestRecordingPermission'
-    }, (response) => {
-      resolve(response);
-    });
-  });
-}
-
-// Update recording state in background
-function updateRecordingState(isRecording) {
-  chrome.runtime.sendMessage({
-    action: 'updateRecordingState',
-    isRecording: isRecording
-  });
-}
-
-// Handle recording errors with recovery
-function handleRecordingError(error) {
-  console.error('[Popup] Handling recording error:', error);
-  recordingState.errorCount++;
-  
-  if (recordingState.errorCount > recordingState.maxErrorCount) {
-    console.error('[Popup] Maximum error count reached, stopping recording');
-    showError('Recording failed after multiple attempts');
-    cleanupRecordingResources();
-    return;
-  }
-  
-  // Attempt to restart recording
-  if (recordingState.mediaRecorder && recordingState.mediaRecorder.state === 'inactive') {
-    try {
-      console.log('[Popup] Attempting to restart recording...');
-      recordingState.mediaRecorder.start(1000);
-      recordingState.isRecording = true;
-      console.log('[Popup] Recording restarted successfully');
-    } catch (restartError) {
-      console.error('[Popup] Failed to restart recording:', restartError);
-      showError('Recording failed and could not be restarted');
-    }
-  } else {
-    showError('Recording error: ' + error.message);
-  }
-}
-
-// Enhanced stop recording with proper cleanup
 async function stopRecording() {
   console.log('[Popup] Stopping recording...');
-  
-  if (!recordingState.mediaRecorder || !recordingState.isRecording) {
-    showError('Not currently recording');
-    return;
+
+  try {
+    stopTimer();
+
+    // Tell background → offscreen to stop recording and get the audio
+    const result = await chrome.runtime.sendMessage({ action: 'stopRecording' });
+
+    if (result && result.success && result.base64Audio) {
+      currentAudioBase64 = result.base64Audio;
+      console.log('[Popup] Got audio data, uploading...');
+
+      // Show processing immediately, then upload
+      showProcessing();
+      await uploadAudioToBackend(result.base64Audio, 'Google Meet Recording');
+    } else {
+      showError('Failed to stop recording: ' + (result?.error || 'No audio data'));
+    }
+  } catch (error) {
+    console.error('[Popup] Error stopping recording:', error);
+    showError('Error stopping: ' + error.message);
   }
-  
-  return new Promise((resolve) => {
-    recordingState.mediaRecorder.onstop = () => {
-      // Create audio blob from chunks
-      const audioBlob = new Blob(recordingState.audioChunks, { type: 'audio/webm' });
-      recordingState.duration = Date.now() - recordingState.startTime;
-      
-      console.log('[Popup] Recording stopped. Size:', audioBlob.size, 'bytes');
-      console.log('[Popup] Duration:', recordingState.duration, 'ms');
-      
-      recordingState.isRecording = false;
-      stopTimer();
-      
-      // Stop all tracks
-      if (recordingState.stream) {
-        recordingState.stream.getTracks().forEach(track => track.stop());
-        recordingState.stream = null;
-      }
-      
-      // Convert blob to base64
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        recordingState.currentAudioBlob = reader.result;
-        
-        // Upload to backend via background script
-        uploadAudioViaBackground(recordingState.currentAudioBlob, 'Google Meet Recording');
-        
-        resolve();
-      };
-      reader.readAsDataURL(audioBlob);
-    };
-    
-    recordingState.mediaRecorder.stop();
-  });
 }
 
-// Upload audio via background script
-async function uploadAudioViaBackground(base64Audio, title) {
-  console.log('[Popup] Uploading audio via background...');
-  
+// ─── Upload ─────────────────────────────────────────────────────────────────
+
+async function uploadAudioToBackend(base64Audio, title) {
   try {
-    const response = await new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({
-        action: 'uploadAudio',
-        base64Audio: base64Audio,
-        title: title
-      }, (response) => {
-        if (response.success) {
-          resolve(response);
-        } else {
-          reject(new Error(response.error));
-        }
-      });
+    const response = await chrome.runtime.sendMessage({
+      action: 'uploadAudio',
+      base64Audio: base64Audio,
+      title: title
     });
-    
-    showResults(response.result.ai_output);
+
+    if (!response) {
+      throw new Error('No response from background script');
+    }
+
+    if (response.success && response.result && response.result.ai_output) {
+      showResults(response.result.ai_output);
+    } else if (response.success && response.result) {
+      // ai_output might not exist if backend returned differently
+      showResults(response.result);
+    } else {
+      throw new Error(response.error || 'Upload failed');
+    }
   } catch (error) {
     console.error('[Popup] Upload error:', error);
     showError('Upload failed: ' + error.message);
   }
 }
 
-// Enhanced cleanup function
-function cleanupRecordingResources() {
-  console.log('[Popup] Cleaning up recording resources...');
-  
-  // Stop media recorder if active
-  if (recordingState.mediaRecorder && recordingState.mediaRecorder.state !== 'inactive') {
-    recordingState.mediaRecorder.stop();
-  }
-  
-  // Stop all tracks
-  if (recordingState.stream) {
-    recordingState.stream.getTracks().forEach(track => track.stop());
-    recordingState.stream = null;
-  }
-  
-  // Clear timer
-  if (recordingState.timer) {
-    clearInterval(recordingState.timer);
-    recordingState.timer = null;
-  }
-  
-  // Reset state
-  initializeRecordingState();
-}
+// ─── File Upload ────────────────────────────────────────────────────────────
 
-// Enhanced reset UI with cleanup
-function resetUI() {
-  cleanupRecordingResources();
-  
-  elements.startBtn.classList.remove('hidden');
-  elements.stopBtn.classList.add('hidden');
-  elements.recordingInfo.classList.add('hidden');
-  elements.recordingSection.classList.remove('hidden');
-  elements.uploadSection.classList.remove('hidden');
-  elements.processingSection.classList.add('hidden');
-  elements.resultsSection.classList.add('hidden');
-  elements.errorSection.classList.add('hidden');
-  elements.recordingTimer.textContent = '00:00';
-  
-  // Re-check meet status
-  checkMeetStatus();
-}
-
-// Enhanced error handling and recovery
-function showError(message) {
-  elements.processingSection.classList.add('hidden');
-  elements.errorSection.classList.remove('hidden');
-  elements.errorText.textContent = message;
-  
-  // Log error to background
-  chrome.runtime.sendMessage({
-    action: 'recordingError',
-    error: message
-  });
-}
-
-// Enhanced cleanup on page unload
-document.addEventListener('beforeunload', () => {
-  console.log('[Popup] Cleaning up before unload...');
-  cleanupRecordingResources();
-});
-
-// Enhanced cleanup on extension suspend
-chrome.runtime.onSuspend.addListener(() => {
-  console.log('[Popup] Extension is being suspended');
-  cleanupRecordingResources();
-});
-
-// Enhanced reset UI with cleanup
-function resetUI() {
-  cleanupRecordingResources();
-  
-  elements.startBtn.classList.remove('hidden');
-  elements.stopBtn.classList.add('hidden');
-  elements.recordingInfo.classList.add('hidden');
-  elements.recordingSection.classList.remove('hidden');
-  elements.uploadSection.classList.remove('hidden');
-  elements.processingSection.classList.add('hidden');
-  elements.resultsSection.classList.add('hidden');
-  elements.errorSection.classList.add('hidden');
-  elements.recordingTimer.textContent = '00:00';
-  
-  // Re-check meet status
-  checkMeetStatus();
-}
-
-// Enhanced error handling and recovery
-function showError(message) {
-  elements.processingSection.classList.add('hidden');
-  elements.errorSection.classList.remove('hidden');
-  elements.errorText.textContent = message;
-  
-  // Log error to background
-  chrome.runtime.sendMessage({
-    action: 'recordingError',
-    error: message
-  });
-}
-
-// Enhanced cleanup on page unload
-document.addEventListener('beforeunload', () => {
-  console.log('[Popup] Cleaning up before unload...');
-  cleanupRecordingResources();
-});
-
-// Enhanced cleanup on extension suspend
-chrome.runtime.onSuspend.addListener(() => {
-  console.log('[Popup] Extension is being suspended');
-  cleanupRecordingResources();
-});
-
-// Enhanced reset UI with cleanup
-function resetUI() {
-  cleanupRecordingResources();
-  
-  elements.startBtn.classList.remove('hidden');
-  elements.stopBtn.classList.add('hidden');
-  elements.recordingInfo.classList.add('hidden');
-  elements.recordingSection.classList.remove('hidden');
-  elements.uploadSection.classList.remove('hidden');
-  elements.processingSection.classList.add('hidden');
-  elements.resultsSection.classList.add('hidden');
-  elements.errorSection.classList.add('hidden');
-  elements.recordingTimer.textContent = '00:00';
-  
-  // Re-check meet status
-  checkMeetStatus();
-}
-
-// Enhanced error handling and recovery
-function showError(message) {
-  elements.processingSection.classList.add('hidden');
-  elements.errorSection.classList.remove('hidden');
-  elements.errorText.textContent = message;
-  
-  // Log error to background
-  chrome.runtime.sendMessage({
-    action: 'recordingError',
-    error: message
-  });
-}
-
-// Enhanced cleanup on page unload
-document.addEventListener('beforeunload', () => {
-  console.log('[Popup] Cleaning up before unload...');
-  cleanupRecordingResources();
-});
-
-// Enhanced cleanup on extension suspend
-chrome.runtime.onSuspend.addListener(() => {
-  console.log('[Popup] Extension is being suspended');
-  cleanupRecordingResources();
-});
-
-// Enhanced reset UI with cleanup
-function resetUI() {
-  cleanupRecordingResources();
-  
-  elements.startBtn.classList.remove('hidden');
-  elements.stopBtn.classList.add('hidden');
-  elements.recordingInfo.classList.add('hidden');
-  elements.recordingSection.classList.remove('hidden');
-  elements.uploadSection.classList.remove('hidden');
-  elements.processingSection.classList.add('hidden');
-  elements.resultsSection.classList.add('hidden');
-  elements.errorSection.classList.add('hidden');
-  elements.recordingTimer.textContent = '00:00';
-  
-  // Re-check meet status
-  checkMeetStatus();
-}
-
-// Enhanced error handling and recovery
-function showError(message) {
-  elements.processingSection.classList.add('hidden');
-  elements.errorSection.classList.remove('hidden');
-  elements.errorText.textContent = message;
-  
-  // Log error to background
-  chrome.runtime.sendMessage({
-    action: 'recordingError',
-    error: message
-  });
-}
-
-// Enhanced cleanup on page unload
-document.addEventListener('beforeunload', () => {
-  console.log('[Popup] Cleaning up before unload...');
-  cleanupRecordingResources();
-});
-
-// Enhanced cleanup on extension suspend
-chrome.runtime.onSuspend.addListener(() => {
-  console.log('[Popup] Extension is being suspended');
-  cleanupRecordingResources();
-});
-
-// Enhanced reset UI with cleanup
-function resetUI() {
-  cleanupRecordingResources();
-  
-  elements.startBtn.classList.remove('hidden');
-  elements.stopBtn.classList.add('hidden');
-  elements.recordingInfo.classList.add('hidden');
-  elements.recordingSection.classList.remove('hidden');
-  elements.uploadSection.classList.remove('hidden');
-  elements.processingSection.classList.add('hidden');
-  elements.resultsSection.classList.add('hidden');
-  elements.errorSection.classList.add('hidden');
-  elements.recordingTimer.textContent = '00:00';
-  
-  // Re-check meet status
-  checkMeetStatus();
-}
-
-// Enhanced error handling and recovery
-function showError(message) {
-  elements.processingSection.classList.add('hidden');
-  elements.errorSection.classList.remove('hidden');
-  elements.errorText.textContent = message;
-  
-  // Log error to background
-  chrome.runtime.sendMessage({
-    action: 'recordingError',
-    error: message
-  });
-}
-
-// Enhanced cleanup on page unload
-document.addEventListener('beforeunload', () => {
-  console.log('[Popup] Cleaning up before unload...');
-  cleanupRecordingResources();
-});
-
-// Enhanced cleanup on extension suspend
-chrome.runtime.onSuspend.addListener(() => {
-  console.log('[Popup] Extension is being suspended');
-  cleanupRecordingResources();
-});
-
-// Start recording timer
-function startTimer() {
-  updateTimer();
-  recordingState.timer = setInterval(updateTimer, 1000);
-}
-
-// Stop recording timer
-function stopTimer() {
-  if (recordingState.timer) {
-    clearInterval(recordingState.timer);
-    recordingState.timer = null;
-  }
-}
-
-// Update timer display
-function updateTimer() {
-  if (!recordingState.startTime) return;
-  
-  recordingState.duration = Math.floor((Date.now() - recordingState.startTime) / 1000);
-  const minutes = Math.floor(recordingState.duration / 60).toString().padStart(2, '0');
-  const seconds = (recordingState.duration % 60).toString().padStart(2, '0');
-  
-  elements.recordingTimer.textContent = `${minutes}:${seconds}`;
-}
-
-// Handle file upload
 function handleFileUpload(event) {
   const file = event.target.files[0];
-  if (file) {
-    handleFile(file);
-  }
+  if (file) handleFile(file);
 }
 
-// Process uploaded file
 async function handleFile(file) {
   console.log('[Popup] File selected:', file.name);
-  
-  // Validate file type
-  const validTypes = ['audio/mpeg', 'audio/wav', 'audio/webm', 'audio/mp4', 'video/mp4', 'audio/ogg'];
-  if (!validTypes.includes(file.type)) {
-    showError('Invalid file type: ' + file.type + '. Please upload MP3, WAV, MP4, WEBM, or OGG files.');
+
+  const validTypes = ['audio/mpeg', 'audio/wav', 'audio/webm', 'audio/mp4', 'video/mp4', 'audio/ogg', 'video/webm'];
+  if (!validTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|webm|mp4|m4a|ogg)$/i)) {
+    showError('Unsupported file type. Please upload MP3, WAV, MP4, WEBM, or OGG files.');
     return;
   }
-  
-  // Convert file to base64
+
+  showProcessing();
+
   const reader = new FileReader();
   reader.onloadend = () => {
-    recordingState.currentAudioBlob = reader.result;
-    uploadAudioViaBackground(recordingState.currentAudioBlob, file.name);
+    currentAudioBase64 = reader.result;
+    uploadAudioToBackend(reader.result, file.name);
+  };
+  reader.onerror = () => {
+    showError('Failed to read file');
   };
   reader.readAsDataURL(file);
 }
 
-// Show processing UI
+// ─── UI State Management ────────────────────────────────────────────────────
+
+function showRecordingUI() {
+  elements.startBtn.classList.add('hidden');
+  elements.stopBtn.classList.remove('hidden');
+  elements.recordingInfo.classList.remove('hidden');
+  elements.uploadSection.classList.add('hidden');
+  elements.errorSection.classList.add('hidden');
+  startTimer();
+}
+
 function showProcessing() {
   elements.recordingSection.classList.add('hidden');
   elements.uploadSection.classList.add('hidden');
@@ -707,25 +278,70 @@ function showProcessing() {
   elements.errorSection.classList.add('hidden');
 }
 
-// Show results UI
 function showResults(summary) {
   elements.processingSection.classList.add('hidden');
   elements.resultsSection.classList.remove('hidden');
-  
-  // Format and display summary
+
   const html = formatSummary(summary);
   elements.summaryContent.innerHTML = html;
 }
 
-// Format summary for display
+function showError(message) {
+  elements.processingSection.classList.add('hidden');
+  elements.errorSection.classList.remove('hidden');
+  elements.errorText.textContent = message;
+}
+
+function resetUI() {
+  stopTimer();
+  currentAudioBase64 = null;
+  recordingStartTime = null;
+
+  elements.startBtn.classList.remove('hidden');
+  elements.stopBtn.classList.add('hidden');
+  elements.recordingInfo.classList.add('hidden');
+  elements.uploadSection.classList.remove('hidden');
+  elements.processingSection.classList.add('hidden');
+  elements.resultsSection.classList.add('hidden');
+  elements.errorSection.classList.add('hidden');
+  elements.recordingTimer.textContent = '00:00';
+
+  checkMeetStatus();
+}
+
+// ─── Timer ──────────────────────────────────────────────────────────────────
+
+function startTimer() {
+  updateTimer();
+  timerInterval = setInterval(updateTimer, 1000);
+}
+
+function stopTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+}
+
+function updateTimer() {
+  if (!recordingStartTime) return;
+
+  const elapsedSec = Math.floor((Date.now() - recordingStartTime) / 1000);
+  const minutes = Math.floor(elapsedSec / 60).toString().padStart(2, '0');
+  const seconds = (elapsedSec % 60).toString().padStart(2, '0');
+
+  elements.recordingTimer.textContent = `${minutes}:${seconds}`;
+}
+
+// ─── Summary Formatting ────────────────────────────────────────────────────
+
 function formatSummary(summary) {
   if (!summary || typeof summary !== 'object') {
     return '<p class="error">Invalid summary format</p>';
   }
-  
+
   let html = '';
-  
-  // Summary
+
   if (summary.summary) {
     html += `
       <div class="summary-section">
@@ -734,8 +350,7 @@ function formatSummary(summary) {
       </div>
     `;
   }
-  
-  // Key Points
+
   if (summary.key_points && summary.key_points.length > 0) {
     html += `
       <div class="summary-section">
@@ -746,20 +361,18 @@ function formatSummary(summary) {
       </div>
     `;
   }
-  
-  // Decisions
+
   if (summary.decisions && summary.decisions.length > 0) {
     html += `
       <div class="summary-section">
         <h3>✅ Decisions</h3>
         <ul>
-          ${summary.decisions.map(decision => `<li>${escapeHtml(decision)}</li>`).join('')}
+          ${summary.decisions.map(d => `<li>${escapeHtml(d)}</li>`).join('')}
         </ul>
       </div>
     `;
   }
-  
-  // Action Items
+
   if (summary.action_items && summary.action_items.length > 0) {
     html += `
       <div class="summary-section">
@@ -767,17 +380,16 @@ function formatSummary(summary) {
         <ul class="action-items">
           ${summary.action_items.map(item => `
             <li>
-              <span class="task">${escapeHtml(item.task)}</span>
-              <span class="owner">@${escapeHtml(item.owner)}</span>
-              <span class="status ${item.status.toLowerCase()}">${escapeHtml(item.status)}</span>
+              <span class="task">${escapeHtml(item.task || '')}</span>
+              <span class="owner">@${escapeHtml(item.owner || 'Unassigned')}</span>
+              <span class="status ${(item.status || 'pending').toLowerCase()}">${escapeHtml(item.status || 'Pending')}</span>
             </li>
           `).join('')}
         </ul>
       </div>
     `;
   }
-  
-  // Agenda
+
   if (summary.agenda && summary.agenda.length > 0) {
     html += `
       <div class="summary-section">
@@ -788,11 +400,10 @@ function formatSummary(summary) {
       </div>
     `;
   }
-  
+
   return html || '<p>No summary available</p>';
 }
 
-// Escape HTML to prevent XSS
 function escapeHtml(text) {
   if (!text) return '';
   const div = document.createElement('div');
@@ -800,22 +411,23 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// Download recorded audio
+// ─── Download ───────────────────────────────────────────────────────────────
+
 function downloadAudio() {
-  if (!recordingState.currentAudioBlob) {
+  if (!currentAudioBase64) {
     showError('No audio to download');
     return;
   }
-  
+
   const link = document.createElement('a');
-  link.href = recordingState.currentAudioBlob;
+  link.href = currentAudioBase64;
   link.download = 'meeting-recording-' + Date.now() + '.webm';
   link.click();
   link.remove();
 }
 
-// View history
+// ─── History ────────────────────────────────────────────────────────────────
+
 function viewHistory() {
-  // Implementation for viewing history
-  console.log('[Popup] View history clicked');
+  chrome.tabs.create({ url: 'http://localhost:8000/meetings' });
 }

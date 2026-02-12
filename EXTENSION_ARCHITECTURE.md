@@ -510,29 +510,29 @@ meeting/
 - [x] Remove test files
 - [x] Create documentation (this file)
 
-### Phase 2: Extension Setup
-- [ ] Update manifest.json
-- [ ] Create popup.html
-- [ ] Create popup.js
-- [ ] Add icons
+### Phase 2: Extension Setup ✅
+- [x] Update manifest.json
+- [x] Create popup.html
+- [x] Create popup.js
+- [x] Add icons
 
-### Phase 3: Audio Recording
-- [ ] Implement background.js
-- [ ] Add tabCapture logic
-- [ ] Test audio recording
-- [ ] Handle start/stop
+### Phase 3: Audio Recording ✅
+- [x] Implement background.js (offscreen document architecture)
+- [x] Add tabCapture logic (getMediaStreamId + offscreen)
+- [x] Handle start/stop via offscreen.js
+- [ ] Test audio recording (manual test needed)
 
-### Phase 4: Backend Integration
-- [ ] Connect extension to backend
-- [ ] Upload recorded audio
-- [ ] Display summary
-- [ ] Save to history
+### Phase 4: Backend Integration ✅
+- [x] Connect extension to backend
+- [x] Upload recorded audio
+- [x] Display summary
+- [x] Save to history
 
-### Phase 5: Polish
-- [ ] Add styling
-- [ ] Error handling
-- [ ] Loading states
-- [ ] User feedback
+### Phase 5: Polish ✅
+- [x] Add styling
+- [x] Error handling
+- [x] Loading states
+- [x] User feedback
 
 ---
 

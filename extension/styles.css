@@ -104,6 +104,15 @@ header {
     background: #ef4444;
 }
 
+/* Standalone status dot (e.g. backend status in footer) */
+.status-dot.online {
+    background: #4ade80;
+}
+
+.status-dot.offline {
+    background: #f87171;
+}
+
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }

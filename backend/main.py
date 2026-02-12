@@ -4,6 +4,12 @@ import os
 # Add backend directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Load environment variables from backend directory
+from dotenv import load_dotenv
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(backend_dir, '.env')
+load_dotenv(dotenv_path=env_path, override=True)
+
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -61,7 +67,7 @@ async def create_meeting(
         print(f"[BACKEND] File saved successfully")
 
     # Generate AI Output
-    from .ai import generate_meeting_summary
+    from ai import generate_meeting_summary
     
     # Check if we have content to process
     if not transcript and not file_path:
@@ -110,6 +116,20 @@ async def create_meeting(
 def read_meetings(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     meetings = db.query(models.Meeting).offset(skip).limit(limit).all()
     return meetings
+
+@app.get("/test")
+def test_endpoint():
+    """Test endpoint to verify backend is running"""
+    import os
+    from dotenv import load_dotenv
+    load_dotenv()
+    
+    api_key = os.getenv("GEMINI_API_KEY")
+    return {
+        "status": "Backend is running",
+        "has_api_key": bool(api_key),
+        "api_key_preview": f"{api_key[:10]}..." if api_key else "NOT SET"
+    }
 
 @app.get("/meetings/{meeting_id}", response_model=schemas.Meeting)
 def read_meeting(meeting_id: int, db: Session = Depends(get_db)):
